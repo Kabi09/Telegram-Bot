@@ -1,39 +1,19 @@
-import TelegramBot from "node-telegram-bot-api";
-import fetch from "node-fetch";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-import express from "express";
 
-dotenv.config();
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-  res.send("welcome");
-});
-
-app.listen(PORT, () => {
-  console.log(`🌍 Server running on port ${PORT}`);
-});
+let isConnected = false;
 
 // ===============================
-// ✅ Telegram Bot (Polling Mode)
+// MongoDB Connection (Serverless Safe)
 // ===============================
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: true,
-});
-
-console.log("🤖 Bot running locally with polling...");
+async function connectDB() {
+  if (isConnected) return;
+  await mongoose.connect(process.env.MONGO_URI);
+  isConnected = true;
+}
 
 // ===============================
-// ✅ MongoDB
+// Schema
 // ===============================
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log("MongoDB Error:", err));
-
 const chatSchema = new mongoose.Schema({
   userId: String,
   messages: [
@@ -44,29 +24,45 @@ const chatSchema = new mongoose.Schema({
   ],
 });
 
-const Chat = mongoose.model("Chat", chatSchema);
+const Chat = mongoose.models.Chat || mongoose.model("Chat", chatSchema);
 
 // ===============================
-// ✅ Handle Messages
+// Main Handler
 // ===============================
-bot.on("message", async (msg) => {
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(200).json({ status: "KabiGPT running 🚀" });
+  }
+
   try {
-    const chatId = msg.chat.id;
-    const text = msg.text;
+    await connectDB();
 
-    if (!text) return;
+    const message = req.body?.message;
 
-    if (text === "/start") {
-      return bot.sendMessage(
-        chatId,
-        "Hello 👋 I am KabiGPT AI.\nAsk me anything!"
-      );
+    if (!message || !message.text) {
+      return res.status(200).json({ status: "No message" });
     }
 
-    // Typing animation
-    await bot.sendChatAction(chatId, "typing");
+    const chatId = message.chat.id;
+    const userText = message.text;
 
-    // Get or create chat history
+    // ==========================
+    // /start command
+    // ==========================
+    if (userText === "/start") {
+      await sendMessage(
+        chatId,
+        "Hello 👋 I am *KabiGPT* 🤖✨\n\nI am your happy AI friend!\nAsk me anything 🚀",
+        true
+      );
+      return res.status(200).json({ success: true });
+    }
+
+    await sendTyping(chatId);
+
+    // ==========================
+    // Get or Create User Chat
+    // ==========================
     let userChat = await Chat.findOne({ userId: chatId });
 
     if (!userChat) {
@@ -79,13 +75,36 @@ bot.on("message", async (msg) => {
     // Add user message
     userChat.messages.push({
       role: "user",
-      content: text,
+      content: userText,
     });
 
     const lastMessages = userChat.messages.slice(-10);
 
-    // 🔥 Call Ollama Cloud
-    const response = await fetch("https://ollama.com/api/chat", {
+    // ==========================
+    // KabiGPT Personality Prompt
+    // ==========================
+    const systemPrompt = {
+      role: "system",
+      content: `
+You are KabiGPT 🤖✨
+
+Rules:
+- Always speak in a happy, friendly and respectful tone.
+- Never use bad words.
+- Never respond angrily.
+- Never insult the user.
+- Stay positive and encouraging.
+- Keep answers helpful and slightly fun.
+- Use emojis occasionally 😊🚀✨ but not too many.
+- If user is rude, respond calmly and respectfully.
+- Always act professional and kind.
+`,
+    };
+
+    // ==========================
+    // Call Ollama Cloud
+    // ==========================
+    const aiResponse = await fetch("https://ollama.com/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -93,13 +112,13 @@ bot.on("message", async (msg) => {
       },
       body: JSON.stringify({
         model: "ministral-3:3b-cloud",
-        messages: lastMessages,
+        messages: [systemPrompt, ...lastMessages],
         stream: false,
       }),
     });
 
-    const data = await response.json();
-    const reply = data.message?.content || "AI Error";
+    const data = await aiResponse.json();
+    const reply = data.message?.content || "⚠️ Sorry! Something went wrong.";
 
     // Save AI reply
     userChat.messages.push({
@@ -109,9 +128,41 @@ bot.on("message", async (msg) => {
 
     await userChat.save();
 
-    // Send reply
-    await bot.sendMessage(chatId, reply);
+    await sendMessage(chatId, reply);
+
+    return res.status(200).json({ success: true });
+
   } catch (error) {
     console.error("Error:", error);
+    return res.status(200).json({ error: true });
   }
-});
+}
+
+// ===============================
+// Send Message
+// ===============================
+async function sendMessage(chatId, text, markdown = false) {
+  await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: markdown ? "Markdown" : undefined,
+    }),
+  });
+}
+
+// ===============================
+// Typing Indicator
+// ===============================
+async function sendTyping(chatId) {
+  await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendChatAction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      action: "typing",
+    }),
+  });
+}
