@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     if (userText === "/start") {
       await sendMessage(
         chatId,
-        "Hello 👋 I am *KabiGPT* 🤖✨\n\nI am your happy AI friend!\nAsk me anything 🚀",
+        "Vanakkam! 👋 I am *KabiGPT* 🤖✨\n\nUngaloda AI nanban! Epdi help pannatum? 🚀",
         true
       );
       return res.status(200).json({ success: true });
@@ -89,6 +89,8 @@ export default async function handler(req, res) {
 You are KabiGPT 🤖✨
 
 Rules:
+- Speak in Tanglish (Tamil + English).
+- Mix Tamil and English naturally (e.g., "Vanakkam, epdi irukinga? I am here to help you!").
 - Always speak in a happy, friendly and respectful tone.
 - Never use bad words.
 - Never respond angrily.
