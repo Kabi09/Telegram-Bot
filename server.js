@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     if (userText === "/start") {
       await sendMessage(
         chatId,
-        "Vanakkam! 👋 I am *KabiGPT* 🤖✨\n\nUngaloda AI nanban! Epdi help pannatum? 🚀",
+        "Vanakkam! 👋 I am *KabiGPT* 🤖✨\n\nCreated by *Kabilan* 😎\n\nUngaloda AI nanban! Epdi help pannatum? 🚀",
         true
       );
       return res.status(200).json({ success: true });
