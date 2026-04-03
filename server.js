@@ -138,7 +138,7 @@ You are a friendly Tamil tech friend 💛
         Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-oss:20b",
+        model: "gpt-oss:120b-cloud",
         messages: [systemPrompt, ...lastMessages],
         stream: false,
       }),
